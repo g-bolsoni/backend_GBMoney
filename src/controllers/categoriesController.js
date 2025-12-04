@@ -42,10 +42,8 @@ class categoriesController {
       const savedCategory = await newCategory.save();
 
       // Retorna a categoria criada
-      console.log(savedCategory);
       return reply.status(201).send(savedCategory);
     } catch (error) {
-      console.error("Erro ao criar a categoria:", error.message);
       return reply.status(500).send(error);
     }
   }
@@ -63,7 +61,7 @@ class categoriesController {
       if (!catgory) {
         return reply.status(404).send({ message: "Category not found" });
       }
-      return reply.status(201).send({ message: "Category successfully deleted" });
+      return reply.status(200).send({ message: "Category successfully deleted" });
     } catch (error) {
       return reply.status(404).send({ message: "Category not found" });
     }
