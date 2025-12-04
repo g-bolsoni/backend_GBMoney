@@ -7,10 +7,24 @@ const User = require("../models/usersModel");
 class productController {
   async index(request, reply) {
     //Listar todas contas
+    try {
+      console.log('📋 billsController.index: Buscando bills para user_id:', request.user_id);
 
-    const bills = await billsModel.find({ user_id: request.user_id });
+      const bills = await billsModel.find({ user_id: request.user_id });
 
-    return reply.status(200).send(bills);
+      console.log('📊 billsController.index: Encontradas', bills.length, 'bills');
+      console.log('📅 billsController.index: Sample bills:', bills.slice(0, 2).map(b => ({
+        id: b._id,
+        description: b.description,
+        value: b.value,
+        buy_date: b.buy_date
+      })));
+
+      return reply.status(200).send(bills);
+    } catch (error) {
+      console.error('❌ billsController.index: Erro ao buscar bills:', error);
+      return reply.status(500).send({ message: "Erro interno do servidor" });
+    }
   }
 
   async findOne(request, reply) {
@@ -37,11 +51,27 @@ class productController {
       const billData = request.body;
       billData.user_id = request.user_id;
 
-      await billsModel.create(billData);
+      console.log('➕ Criando bill com dados:', billData);
+      const savedBill = await billsModel.create(billData);
+      console.log('➕ savedBill criada:', savedBill);
 
       return reply.status(200).send({ message: "Bill has been created!" });
     } catch (error) {
+      console.log('Erro ao criar bill:', error);
       reply.status(404).send({ message: error });
+    }
+  }
+
+  // Função auxiliar para criar uma bill com dados diretos (sem request/reply)
+  async createBillData(billData) {
+    console.log('➕ createBillData: Criando bill com dados:', billData);
+    try {
+      const savedBill = await billsModel.create(billData);
+      console.log('➕ createBillData: savedBill criada:', savedBill._id);
+      return savedBill;
+    } catch (error) {
+      console.error('❌ createBillData: Erro ao salvar:', error);
+      throw new Error(`Erro ao salvar transação: ${error.message}`);
     }
   }
 
