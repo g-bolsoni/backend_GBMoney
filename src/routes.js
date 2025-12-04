@@ -5,6 +5,7 @@ const filterController = require("./controllers/filterController");
 const authController = require("./controllers/authController");
 const userController = require("./controllers/userController");
 const categoryControler = require("./controllers/categoriesController");
+const importController = require("./controllers/importController");
 
 async function routes(fastify, options) {
   // Middleware para autenticação
@@ -16,7 +17,8 @@ async function routes(fastify, options) {
     }
 
     try {
-      const decoded = jwt.verify(token, process.env.SECRET);
+      const cleanToken = token.replace('Bearer ', '');
+      const decoded = jwt.verify(cleanToken, process.env.SECRET);
       request.user_id = decoded.id;
     } catch (error) {
       fastify.log.error(error);
@@ -69,13 +71,17 @@ async function routes(fastify, options) {
         tags: ["Bills"],
         body: {
           type: "object",
-          required: ["description", "value", "category_id", "bill_type", "due_date"],
+          required: ["bill_name", "bill_value", "bill_category", "bill_type", "buy_date"],
           properties: {
-            description: { type: "string" },
-            value: { type: "number" },
-            category_id: { type: "string" },
+            bill_name: { type: "string" },
+            bill_value: { type: "number" },
+            bill_category: { type: "string" },
             bill_type: { type: "string" },
-            due_date: { type: "string", format: "date" },
+            buy_date: { type: "string" },
+            payment_type: { type: "string" },
+            repeat: { type: "boolean" },
+            installments: { type: "string" },
+            fixed: { type: "boolean" },
           },
         },
       },
@@ -90,13 +96,17 @@ async function routes(fastify, options) {
         tags: ["Bills"],
         body: {
           type: "object",
-          required: ["description", "value", "category_id", "bill_type", "due_date"],
+          required: ["bill_name", "bill_value", "bill_category", "bill_type", "buy_date"],
           properties: {
-            description: { type: "string" },
-            value: { type: "number" },
-            category_id: { type: "string" },
+            bill_name: { type: "string" },
+            bill_value: { type: "number" },
+            bill_category: { type: "string" },
             bill_type: { type: "string" },
-            due_date: { type: "string", format: "date" },
+            buy_date: { type: "string" },
+            payment_type: { type: "string" },
+            repeat: { type: "boolean" },
+            installments: { type: "string" },
+            fixed: { type: "boolean" },
           },
         },
       },
@@ -497,7 +507,7 @@ async function routes(fastify, options) {
             icon: { type: "string" },
             category_type: { type: "string" },
             isActive: { type: "boolean" },
-            budget: { type: "number" },
+            budget: { type: "string" },
           },
         },
         response: {
@@ -513,11 +523,11 @@ async function routes(fastify, options) {
               isActive: { type: "boolean" },
               budget: { type: "number" },
             },
-            500: {
-              type: "object",
-              properties: {
-                message: { type: "string" },
-              },
+          },
+          500: {
+            type: "object",
+            properties: {
+              message: { type: "string" },
             },
           },
         },
@@ -560,6 +570,197 @@ async function routes(fastify, options) {
       },
     },
     categoryControler.deleteCategory
+  );
+
+  // Import routes
+  fastify.post(
+    "/import/upload",
+    {
+      preHandler: fastify.verifyToken,
+      schema: {
+        tags: ["Import"],
+        consumes: ["multipart/form-data"],
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              uploadId: { type: "string" },
+              preview: { type: "object" },
+              message: { type: "string" }
+            }
+          },
+          400: {
+            type: "object",
+            properties: {
+              error: { type: "string" }
+            }
+          }
+        }
+      }
+    },
+    importController.uploadFile
+  );
+
+  fastify.get(
+    "/import/preview/:uploadId",
+    {
+      preHandler: fastify.verifyToken,
+      schema: {
+        tags: ["Import"],
+        params: {
+          type: "object",
+          properties: {
+            uploadId: { type: "string" }
+          },
+          required: ["uploadId"]
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              uploadId: { type: "string" },
+              preview: { type: "object" },
+              filename: { type: "string" }
+            }
+          },
+          404: {
+            type: "object",
+            properties: {
+              error: { type: "string" }
+            }
+          }
+        }
+      }
+    },
+    importController.getPreview
+  );
+
+  fastify.post(
+    "/import/confirm/:uploadId",
+    {
+      preHandler: fastify.verifyToken,
+      schema: {
+        tags: ["Import"],
+        params: {
+          type: "object",
+          properties: {
+            uploadId: { type: "string" }
+          },
+          required: ["uploadId"]
+        },
+        body: {
+          type: "object",
+          properties: {
+            mapping: { type: "object" },
+            categoryMapping: { type: "object" }
+          },
+          additionalProperties: true
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              success: { type: "boolean" },
+              message: { type: "string" },
+              uploadId: { type: "string" },
+              sessionId: { type: "string" }
+            }
+          }
+        }
+      }
+    },
+    importController.confirmImport
+  );
+
+  // Streaming progress routes
+  fastify.get(
+    "/import/progress/:uploadId/stream",
+    {
+      preHandler: fastify.verifyToken,
+      schema: {
+        tags: ["Import", "Streaming"],
+        params: {
+          type: "object",
+          properties: {
+            uploadId: { type: "string" }
+          },
+          required: ["uploadId"]
+        },
+        produces: ["text/event-stream"]
+      }
+    },
+    async (request, reply) => {
+      const streamingService = require('./services/streamingService');
+      return streamingService.createSSEEndpoint(request, reply);
+    }
+  );
+
+  fastify.get(
+    "/import/status/:uploadId",
+    {
+      preHandler: fastify.verifyToken,
+      schema: {
+        tags: ["Import", "Streaming"],
+        params: {
+          type: "object",
+          properties: {
+            uploadId: { type: "string" }
+          },
+          required: ["uploadId"]
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              status: { type: "string" },
+              progress: { type: "number" },
+              processedRows: { type: "number" },
+              totalRows: { type: "number" },
+              successfulRows: { type: "number" },
+              errorRows: { type: "number" },
+              estimatedTimeRemaining: { type: "number" },
+              processingSpeed: { type: "number" }
+            }
+          },
+          404: {
+            type: "object",
+            properties: {
+              error: { type: "string" }
+            }
+          }
+        }
+      }
+    },
+    async (request, reply) => {
+      const streamingService = require('./services/streamingService');
+      const { uploadId } = request.params;
+
+      const session = streamingService.getSessionStatus(uploadId);
+
+      if (!session) {
+        return reply.status(404).send({
+          error: 'Sessão de importação não encontrada'
+        });
+      }
+
+      if (session.userId !== request.user_id) {
+        return reply.status(403).send({
+          error: 'Não autorizado'
+        });
+      }
+
+      return reply.send({
+        status: session.status,
+        progress: session.progress,
+        processedRows: session.processedRows,
+        totalRows: session.totalRows,
+        successfulRows: session.successfulRows,
+        errorRows: session.errorRows,
+        estimatedTimeRemaining: session.estimatedTimeRemaining,
+        processingSpeed: session.processingSpeed,
+        errors: session.errors?.slice(-10) || [] // Últimos 10 erros
+      });
+    }
   );
 }
 
