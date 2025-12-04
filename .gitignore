@@ -1,2 +1,6 @@
 node_modules
-.env
+.env# Arquivos de teste CSV
+*.csv
+src/temp/
+temp/
+uploads/
